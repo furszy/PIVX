@@ -130,8 +130,7 @@ public:
 
         // Compute the number of the received blocks
         size_t nBlocks = 0;
-        for(auto point : points)
-        {
+        for(auto point : points) {
             nBlocks += point.second;
         }
 
@@ -142,8 +141,7 @@ public:
         bool banNode = (nAvgValue >= 1.5 * maxAvg && size >= maxAvg) ||
                        (nAvgValue >= maxAvg && nBlocks >= maxSize) ||
                        (nBlocks >= maxSize * 3);
-        if(banNode)
-        {
+        if(banNode) {
             // Clear the points and ban the node
             points.clear();
             return state.DoS(100, error("block-spam ban node for sending spam"));
@@ -1036,31 +1034,35 @@ void static ProcessGetData(CNode* pfrom, CConnman* connman, const std::atomic<bo
     }
 }
 
-static void CheckBlockSpam(CValidationState& state, CNode* pfrom, const uint256& hashBlock)
+static void CheckBlockSpam(NodeId nodeId, const uint256& hashBlock)
 {
     // Block spam filtering
     if (!gArgs.GetBoolArg("-blockspamfilter", DEFAULT_BLOCK_SPAM_FILTER)) {
         return;
     }
-    CNodeState *nodestate = State(pfrom->GetId());
-    if(!nodestate) {
-        return;
+
+    CNodeState* nodestate = nullptr;
+    int blockReceivedHeight = 0;
+    {
+        LOCK(cs_main);
+        nodestate = State(nodeId);
+        if (!nodestate) { return; }
+
+        const auto it = mapBlockIndex.find(hashBlock);
+        if (it == mapBlockIndex.end()) { return; }
+        blockReceivedHeight = it->second->nHeight;
     }
 
-    const auto it = mapBlockIndex.find(hashBlock);
-    if (it == mapBlockIndex.end()) {
-        return;
-    }
-
-    nodestate->nodeBlocks.onBlockReceived(it->second->nHeight);
+    nodestate->nodeBlocks.onBlockReceived(blockReceivedHeight);
     bool nodeStatus = true;
     // UpdateState will return false if the node is attacking us or update the score and return true.
+    CValidationState state;
     nodeStatus = nodestate->nodeBlocks.updateState(state, nodeStatus);
     int nDoS = 0;
     if (state.IsInvalid(nDoS)) {
         if (nDoS > 0) {
             LOCK(cs_main);
-            Misbehaving(pfrom->GetId(), nDoS);
+            Misbehaving(nodeId, nDoS);
         }
         nodeStatus = false;
     }
@@ -1701,7 +1703,7 @@ bool static ProcessMessage(CNode* pfrom, std::string strCommand, CDataStream& vR
                 bool fAccepted = true;
                 ProcessNewBlock(state, pblock, nullptr, &fAccepted);
                 if (!fAccepted) {
-                    CheckBlockSpam(state, pfrom, hashBlock);
+                    CheckBlockSpam(pfrom->GetId(), hashBlock);
                 }
                 //disconnect this node if its old protocol version
                 pfrom->DisconnectOldProtocol(pfrom->nVersion, ActiveProtocol(), strCommand);
