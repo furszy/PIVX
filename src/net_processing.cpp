@@ -1703,14 +1703,6 @@ bool static ProcessMessage(CNode* pfrom, std::string strCommand, CDataStream& vR
                 if (!fAccepted) {
                     CheckBlockSpam(state, pfrom, hashBlock);
                 }
-                int nDoS;
-                if(state.IsInvalid(nDoS)) {
-                    assert (state.GetRejectCode() < REJECT_INTERNAL); // Blocks are never rejected with internal reject codes
-                    if(nDoS > 0) {
-                        TRY_LOCK(cs_main, lockMain);
-                        if(lockMain) Misbehaving(pfrom->GetId(), nDoS);
-                    }
-                }
                 //disconnect this node if its old protocol version
                 pfrom->DisconnectOldProtocol(pfrom->nVersion, ActiveProtocol(), strCommand);
             } else {
