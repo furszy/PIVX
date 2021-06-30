@@ -143,10 +143,10 @@ BOOST_AUTO_TEST_CASE(processnewblock_signals_ordering)
                 if (block->vtx.size() == 1) {
                     bool processed = ProcessNewBlock(state, block, nullptr);
                     // Future to do: "prevblk-not-found" here is the only valid reason to not check processed flag.
-                    if (state.GetRejectReason() == "duplicate" ||
-                        state.GetRejectReason() == "prevblk-not-found" ||
-                        state.GetRejectReason() == "bad-prevblk") continue;
-                    ASSERT_WITH_MSG(!processed,  ("Error: " + state.GetRejectReason()).c_str());
+                    std::string stateReason = state.GetRejectReason();
+                    if (stateReason == "duplicate" || stateReason == "prevblk-not-found" ||
+                        stateReason == "bad-prevblk" || stateReason == "blk-out-of-order") continue;
+                    ASSERT_WITH_MSG(processed,  ("Error: " + state.GetRejectReason()).c_str());
                 }
             }
         });

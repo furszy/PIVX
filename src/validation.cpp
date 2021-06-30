@@ -2760,7 +2760,7 @@ bool CheckBlock(const CBlock& block, CValidationState& state, bool fCheckPOW, bo
             //out of order
             auto mi = mapBlockIndex.find(block.hashPrevBlock);
             if (mi == mapBlockIndex.end()) {
-                return false;
+                return state.Error("blk-out-of-order");
             }
             pindexPrev = mi->second;
         }
