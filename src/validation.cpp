@@ -13,6 +13,7 @@
 #include "addrman.h"
 #include "amount.h"
 #include "blocksignature.h"
+#include "util/blockstatecatcher.h"
 #include "budget/budgetmanager.h"
 #include "chainparams.h"
 #include "checkpoints.h"
@@ -3307,7 +3308,7 @@ static bool AcceptBlock(const CBlock& block, CValidationState& state, CBlockInde
     return true;
 }
 
-bool ProcessNewBlock(CValidationState& state, const std::shared_ptr<const CBlock> pblock, const FlatFilePos* dbp, bool* fAccepted)
+bool ProcessNewBlock(const std::shared_ptr<const CBlock> pblock, const FlatFilePos* dbp, bool* fAccepted)
 {
     AssertLockNotHeld(cs_main);
 
@@ -3318,7 +3319,9 @@ bool ProcessNewBlock(CValidationState& state, const std::shared_ptr<const CBlock
     {
         // CheckBlock requires cs_main lock
         LOCK(cs_main);
+        CValidationState state;
         if (!CheckBlock(*pblock, state)) {
+            GetMainSignals().BlockChecked(*pblock, state);
             return error ("%s : CheckBlock FAILED for block %s, %s", __func__, pblock->GetHash().GetHex(), FormatStateMessage(state));
         }
 
@@ -3328,11 +3331,13 @@ bool ProcessNewBlock(CValidationState& state, const std::shared_ptr<const CBlock
         if (fAccepted) *fAccepted = ret;
         CheckBlockIndex();
         if (!ret) {
+            GetMainSignals().BlockChecked(*pblock, state);
             return error("%s : AcceptBlock FAILED", __func__);
         }
         newHeight = pindex->nHeight;
     }
 
+    CValidationState state; // Only used to report errors, not invalidity - ignore it
     if (!ActivateBestChain(state, pblock))
         return error("%s : ActivateBestChain failed", __func__);
 
@@ -3858,6 +3863,10 @@ bool LoadExternalBlockFile(FILE* fileIn, FlatFilePos* dbp)
     static std::multimap<uint256, FlatFilePos> mapBlocksUnknownParent;
     int64_t nStart = GetTimeMillis();
 
+    // Block checked event listener
+    BlockStateCatcher stateCatcher(UINT256_ZERO);
+    stateCatcher.registerEvent();
+
     int nLoaded = 0;
     try {
         // This takes over fileIn and calls fclose() on it in the CBufferedFile destructor
@@ -3909,12 +3918,14 @@ bool LoadExternalBlockFile(FILE* fileIn, FlatFilePos* dbp)
 
                 // process in case the block isn't known yet
                 if (mapBlockIndex.count(hash) == 0 || (mapBlockIndex[hash]->nStatus & BLOCK_HAVE_DATA) == 0) {
-                    CValidationState state;
                     std::shared_ptr<const CBlock> block_ptr = std::make_shared<const CBlock>(block);
-                    if (ProcessNewBlock(state, block_ptr, dbp))
+                    stateCatcher.setBlockHash(block_ptr->GetHash());
+                    if (ProcessNewBlock(block_ptr, dbp)) {
                         nLoaded++;
-                    if (state.IsError())
+                    }
+                    if (stateCatcher.stateErrorFound()) {
                         break;
+                    }
                 } else if (hash != Params().GetConsensus().hashGenesisBlock && mapBlockIndex[hash]->nHeight % 1000 == 0) {
                     LogPrint(BCLog::REINDEX, "Block Import: already had block %s at height %d\n", hash.ToString(), mapBlockIndex[hash]->nHeight);
                 }
@@ -3931,11 +3942,10 @@ bool LoadExternalBlockFile(FILE* fileIn, FlatFilePos* dbp)
                         if (ReadBlockFromDisk(block, it->second)) {
                             LogPrint(BCLog::REINDEX, "%s: Processing out of order child %s of %s\n", __func__, block.GetHash().ToString(),
                                 head.ToString());
-                            CValidationState dummy;
                             std::shared_ptr<const CBlock> block_ptr = std::make_shared<const CBlock>(block);
-                            if (ProcessNewBlock(dummy, block_ptr, &it->second)) {
+                            if (ProcessNewBlock(block_ptr, &it->second)) {
                                 nLoaded++;
-                                queue.push_back(block.GetHash());
+                                queue.emplace_back(block.GetHash());
                             }
                         }
                         range.first++;

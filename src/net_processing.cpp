@@ -1693,7 +1693,6 @@ bool static ProcessMessage(CNode* pfrom, std::string strCommand, CDataStream& vR
             }
         } else {
             pfrom->AddInventoryKnown(inv);
-            CValidationState state;
             if (!mapBlockIndex.count(hashBlock)) {
                 {
                     LOCK(cs_main);
@@ -1701,8 +1700,8 @@ bool static ProcessMessage(CNode* pfrom, std::string strCommand, CDataStream& vR
                     mapBlockSource.emplace(hashBlock, pfrom->GetId());
                 }
                 bool fAccepted = true;
-                ProcessNewBlock(state, pblock, nullptr, &fAccepted);
-                if (!fAccepted) {
+                ProcessNewBlock(pblock, nullptr, &fAccepted);
+                if (!fAccepted) { // future: can be moved inside BlockChecked.
                     CheckBlockSpam(pfrom->GetId(), hashBlock);
                 }
                 //disconnect this node if its old protocol version

@@ -158,14 +158,19 @@ extern CBlockIndex* pindexBestHeader;
  * block is made active. Note that it does not, however, guarantee that the
  * specific block passed to it has been checked for validity!
  *
- * @param[out]  state      This may be set to an Error state if any error occurred processing it, including during validation/connection/etc of otherwise unrelated blocks during reorganisation; or it may be set to an Invalid state if pblock is itself invalid (but this is not guaranteed even when the block is checked). If you want to *possibly* get feedback on whether pblock is valid, you must also install a CValidationInterface - this will have its BlockChecked method called whenever *any* block completes validation.
- * @param[in]   pfrom      The node which we are receiving the block from; it is added to mapBlockSource and may be penalised if the block is invalid.
+ * If you want to *possibly* get feedback on whether pblock is valid, you must
+ * install a CValidationInterface (see validationinterface.h) - this will have
+ * its BlockChecked method called whenever *any* block completes validation.
+ *
+ * Note that we guarantee that either the proof-of-work is valid on pblock, or
+ * (and possibly also) BlockChecked will have been called.
+ *
  * @param[in]   pblock     The block we want to process.
  * @param[out]  dbp        The already known disk position of pblock, or nullptr if not yet stored.
  * @param[out]  fAccepted  Whether the block is accepted or not
  * @return True if state.IsValid()
  */
-bool ProcessNewBlock(CValidationState& state, const std::shared_ptr<const CBlock> pblock, const FlatFilePos* dbp, bool* fAccepted = nullptr);
+bool ProcessNewBlock(const std::shared_ptr<const CBlock> pblock, const FlatFilePos* dbp, bool* fAccepted = nullptr);
 
 /** Open a block file (blk?????.dat) */
 FILE* OpenBlockFile(const FlatFilePos& pos, bool fReadOnly = false);
