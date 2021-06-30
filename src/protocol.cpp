@@ -36,7 +36,6 @@ const char* NOTFOUND = "notfound";
 const char* FILTERLOAD = "filterload";
 const char* FILTERADD = "filteradd";
 const char* FILTERCLEAR = "filterclear";
-const char* REJECT = "reject";
 const char* SENDHEADERS = "sendheaders";
 const char* SPORK = "spork";
 const char* GETSPORKS = "getsporks";
@@ -97,7 +96,6 @@ const static std::string allNetMessageTypes[] = {
     NetMsgType::FILTERLOAD,
     NetMsgType::FILTERADD,
     NetMsgType::FILTERCLEAR,
-    NetMsgType::REJECT,
     NetMsgType::SENDHEADERS,
     "filtered block", // Should never occur
     "ix",   // deprecated

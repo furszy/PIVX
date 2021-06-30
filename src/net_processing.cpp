@@ -101,12 +101,6 @@ int nPreferredDownload = 0;
 
 namespace
 {
-struct CBlockReject {
-    unsigned char chRejectCode;
-    std::string strRejectReason;
-    uint256 hashBlock;
-};
-
 
 class CNodeBlocks
 {
@@ -201,8 +195,6 @@ struct CNodeState {
     bool fShouldBan;
     //! String name of this peer (debugging/logging purposes).
     const std::string name;
-    //! List of asynchronously-determined block rejections to notify this peer about.
-    std::vector<CBlockReject> rejects;
     //! The best known block we know this peer has announced.
     const CBlockIndex* pindexBestKnownBlock;
     //! The hash of the last unknown block this peer has announced.
@@ -686,8 +678,6 @@ void PeerLogicValidation::BlockChecked(const CBlock& block, const CValidationSta
     if (state.IsInvalid(nDoS)) {
         if (it != mapBlockSource.end() && State(it->second)) {
             assert (state.GetRejectCode() < REJECT_INTERNAL); // Blocks are never rejected with internal reject codes
-            CBlockReject reject = {(unsigned char) state.GetRejectCode(), state.GetRejectReason().substr(0, MAX_REJECT_MESSAGE_LENGTH), hash};
-            State(it->second)->rejects.push_back(reject);
             if (nDoS > 0) {
                 Misbehaving(it->second, nDoS);
             }
@@ -1092,7 +1082,6 @@ bool static ProcessMessage(CNode* pfrom, std::string strCommand, CDataStream& vR
     if (strCommand == NetMsgType::VERSION) {
         // Each connection can only send one version message
         if (pfrom->nVersion != 0) {
-            connman->PushMessage(pfrom, CNetMsgMaker(INIT_PROTO_VERSION).Make(NetMsgType::REJECT, strCommand, REJECT_DUPLICATE, std::string("Duplicate version message")));
             LOCK(cs_main);
             Misbehaving(pfrom->GetId(), 1);
             return false;
@@ -1117,8 +1106,6 @@ bool static ProcessMessage(CNode* pfrom, std::string strCommand, CDataStream& vR
         }
         if (pfrom->nServicesExpected & ~nServices) {
             LogPrint(BCLog::NET, "peer=%d does not offer the expected services (%08x offered, %08x expected); disconnecting\n", pfrom->id, nServices, pfrom->nServicesExpected);
-            connman->PushMessage(pfrom, CNetMsgMaker(INIT_PROTO_VERSION).Make(NetMsgType::REJECT, strCommand, REJECT_NONSTANDARD,
-                               strprintf("Expected to offer services %08x", pfrom->nServicesExpected)));
             pfrom->fDisconnect = true;
             return false;
         }
@@ -1619,11 +1606,9 @@ bool static ProcessMessage(CNode* pfrom, std::string strCommand, CDataStream& vR
             LogPrint(BCLog::MEMPOOLREJ, "%s from peer=%d %s was not accepted into the memory pool: %s\n", tx.GetHash().ToString(),
                 pfrom->id, pfrom->cleanSubVer,
                 FormatStateMessage(state));
-            if (state.GetRejectCode() < REJECT_INTERNAL) // Never send AcceptToMemoryPool's internal codes over P2P
-                connman->PushMessage(pfrom, msgMaker.Make(NetMsgType::REJECT, strCommand, state.GetRejectCode(),
-                        state.GetRejectReason().substr(0, MAX_REJECT_MESSAGE_LENGTH), inv.hash));
-            if (nDoS > 0)
+            if (nDoS > 0) {
                 Misbehaving(pfrom->GetId(), nDoS);
+            }
         }
     }
 
@@ -1721,8 +1706,6 @@ bool static ProcessMessage(CNode* pfrom, std::string strCommand, CDataStream& vR
                 int nDoS;
                 if(state.IsInvalid(nDoS)) {
                     assert (state.GetRejectCode() < REJECT_INTERNAL); // Blocks are never rejected with internal reject codes
-                    connman->PushMessage(pfrom, msgMaker.Make(NetMsgType::REJECT, strCommand, state.GetRejectCode(),
-                        state.GetRejectReason().substr(0, MAX_REJECT_MESSAGE_LENGTH), inv.hash));
                     if(nDoS > 0) {
                         TRY_LOCK(cs_main, lockMain);
                         if(lockMain) Misbehaving(pfrom->GetId(), nDoS);
@@ -1899,51 +1882,29 @@ bool static ProcessMessage(CNode* pfrom, std::string strCommand, CDataStream& vR
         pfrom->fRelayTxes = true;
     }
 
+    // Tier two msg type search
+    bool found = false;
+    const std::vector<std::string>& allMessages = getAllNetMessageTypes();
+    for (const std::string& msg : allMessages) {
+        if (msg == strCommand) {
+            found = true;
+            break;
+        }
+    }
 
-    else if (strCommand == NetMsgType::REJECT) {
-        try {
-            std::string strMsg;
-            unsigned char ccode;
-            std::string strReason;
-            vRecv >> LIMITED_STRING(strMsg, CMessageHeader::COMMAND_SIZE) >> ccode >> LIMITED_STRING(strReason, MAX_REJECT_MESSAGE_LENGTH);
-
-            std::ostringstream ss;
-            ss << strMsg << " code " << itostr(ccode) << ": " << strReason;
-
-            if (strMsg == NetMsgType::BLOCK || strMsg == NetMsgType::TX) {
-                uint256 hash;
-                vRecv >> hash;
-                ss << ": hash " << hash.ToString();
-            }
-            LogPrint(BCLog::NET, "Reject %s\n", SanitizeString(ss.str()));
-        } catch (const std::ios_base::failure& e) {
-            // Avoid feedback loops by preventing reject messages from triggering a new reject message.
-            LogPrint(BCLog::NET, "Unparseable reject message received\n");
+    if (found) {
+        // Check if the dispatcher can process this message first. If not, try going with the old flow.
+        if (!masternodeSync.MessageDispatcher(pfrom, strCommand, vRecv)) {
+            //probably one the extensions
+            mnodeman.ProcessMessage(pfrom, strCommand, vRecv);
+            g_budgetman.ProcessMessage(pfrom, strCommand, vRecv);
+            masternodePayments.ProcessMessageMasternodePayments(pfrom, strCommand, vRecv);
+            sporkManager.ProcessSpork(pfrom, strCommand, vRecv);
+            masternodeSync.ProcessMessage(pfrom, strCommand, vRecv);
         }
     } else {
-        bool found = false;
-        const std::vector<std::string>& allMessages = getAllNetMessageTypes();
-        for (const std::string& msg : allMessages) {
-            if (msg == strCommand) {
-                found = true;
-                break;
-            }
-        }
-
-        if (found) {
-            // Check if the dispatcher can process this message first. If not, try going with the old flow.
-            if (!masternodeSync.MessageDispatcher(pfrom, strCommand, vRecv)) {
-                //probably one the extensions
-                mnodeman.ProcessMessage(pfrom, strCommand, vRecv);
-                g_budgetman.ProcessMessage(pfrom, strCommand, vRecv);
-                masternodePayments.ProcessMessageMasternodePayments(pfrom, strCommand, vRecv);
-                sporkManager.ProcessSpork(pfrom, strCommand, vRecv);
-                masternodeSync.ProcessMessage(pfrom, strCommand, vRecv);
-            }
-        } else {
-            // Ignore unknown commands for extensibility
-            LogPrint(BCLog::NET, "Unknown command \"%s\" from peer=%d\n", SanitizeString(strCommand), pfrom->id);
-        }
+        // Ignore unknown commands for extensibility
+        LogPrint(BCLog::NET, "Unknown command \"%s\" from peer=%d\n", SanitizeString(strCommand), pfrom->id);
     }
 
     return true;
@@ -2027,7 +1988,6 @@ bool PeerLogicValidation::ProcessMessages(CNode* pfrom, std::atomic<bool>& inter
         if (!pfrom->vRecvGetData.empty())
             fMoreWork = true;
     } catch (const std::ios_base::failure& e) {
-        connman->PushMessage(pfrom, CNetMsgMaker(INIT_PROTO_VERSION).Make(NetMsgType::REJECT, strCommand, REJECT_MALFORMED, std::string("error parsing message")));
         if (strstr(e.what(), "end of data")) {
             // Allow exceptions from under-length message on vRecv
             LogPrint(BCLog::NET, "ProcessMessages(%s, %u bytes): Exception '%s' caught, normally caused by a message being shorter than its stated length\n", SanitizeString(strCommand), nMessageSize, e.what());
@@ -2110,10 +2070,6 @@ bool PeerLogicValidation::SendMessages(CNode* pto, std::atomic<bool>& interruptM
             return true;
 
         CNodeState& state = *State(pto->GetId());
-
-        for (const CBlockReject& reject : state.rejects)
-            connman->PushMessage(pto, msgMaker.Make(NetMsgType::REJECT, std::string(NetMsgType::BLOCK), reject.chRejectCode, reject.strRejectReason, reject.hashBlock));
-        state.rejects.clear();
 
         if (state.fShouldBan) {
             state.fShouldBan = false;
