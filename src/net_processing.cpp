@@ -600,8 +600,43 @@ void Misbehaving(NodeId pnode, int howmuch) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
         LogPrintf("Misbehaving: %s (%d -> %d)\n", state->name, state->nMisbehavior - howmuch, state->nMisbehavior);
 }
 
+static void CheckBlockSpam(NodeId nodeId, const uint256& hashBlock)
+{
+    // Block spam filtering
+    if (!gArgs.GetBoolArg("-blockspamfilter", DEFAULT_BLOCK_SPAM_FILTER)) {
+        return;
+    }
 
+    CNodeState* nodestate = nullptr;
+    int blockReceivedHeight = 0;
+    {
+        LOCK(cs_main);
+        nodestate = State(nodeId);
+        if (!nodestate) { return; }
 
+        const auto it = mapBlockIndex.find(hashBlock);
+        if (it == mapBlockIndex.end()) { return; }
+        blockReceivedHeight = it->second->nHeight;
+    }
+
+    nodestate->nodeBlocks.onBlockReceived(blockReceivedHeight);
+    bool nodeStatus = true;
+    // UpdateState will return false if the node is attacking us or update the score and return true.
+    CValidationState state;
+    nodeStatus = nodestate->nodeBlocks.updateState(state, nodeStatus);
+    int nDoS = 0;
+    if (state.IsInvalid(nDoS)) {
+        if (nDoS > 0) {
+            LOCK(cs_main);
+            Misbehaving(nodeId, nDoS);
+        }
+        nodeStatus = false;
+    }
+
+    if (!nodeStatus) {
+        LogPrintf("Block spam protection: %s\n", hashBlock.ToString());
+    }
+}
 
 
 //////////////////////////////////////////////////////////////////////////////
@@ -679,6 +714,9 @@ void PeerLogicValidation::BlockChecked(const CBlock& block, const CValidationSta
             if (nDoS > 0) {
                 Misbehaving(it->second, nDoS);
             }
+
+            // Spam filter
+            CheckBlockSpam(it->second, block.GetHash());
         }
     }
 
@@ -1031,44 +1069,6 @@ void static ProcessGetData(CNode* pfrom, CConnman* connman, const std::atomic<bo
         // risk analyze) the dependencies of transactions relevant to them, without
         // having to download the entire memory pool.
         connman->PushMessage(pfrom, msgMaker.Make(NetMsgType::NOTFOUND, vNotFound));
-    }
-}
-
-static void CheckBlockSpam(NodeId nodeId, const uint256& hashBlock)
-{
-    // Block spam filtering
-    if (!gArgs.GetBoolArg("-blockspamfilter", DEFAULT_BLOCK_SPAM_FILTER)) {
-        return;
-    }
-
-    CNodeState* nodestate = nullptr;
-    int blockReceivedHeight = 0;
-    {
-        LOCK(cs_main);
-        nodestate = State(nodeId);
-        if (!nodestate) { return; }
-
-        const auto it = mapBlockIndex.find(hashBlock);
-        if (it == mapBlockIndex.end()) { return; }
-        blockReceivedHeight = it->second->nHeight;
-    }
-
-    nodestate->nodeBlocks.onBlockReceived(blockReceivedHeight);
-    bool nodeStatus = true;
-    // UpdateState will return false if the node is attacking us or update the score and return true.
-    CValidationState state;
-    nodeStatus = nodestate->nodeBlocks.updateState(state, nodeStatus);
-    int nDoS = 0;
-    if (state.IsInvalid(nDoS)) {
-        if (nDoS > 0) {
-            LOCK(cs_main);
-            Misbehaving(nodeId, nDoS);
-        }
-        nodeStatus = false;
-    }
-
-    if (!nodeStatus) {
-        LogPrintf("Block spam protection: %s\n", hashBlock.ToString());
     }
 }
 
@@ -1701,9 +1701,6 @@ bool static ProcessMessage(CNode* pfrom, std::string strCommand, CDataStream& vR
                 }
                 bool fAccepted = true;
                 ProcessNewBlock(pblock, nullptr, &fAccepted);
-                if (!fAccepted) { // future: can be moved inside BlockChecked.
-                    CheckBlockSpam(pfrom->GetId(), hashBlock);
-                }
                 //disconnect this node if its old protocol version
                 pfrom->DisconnectOldProtocol(pfrom->nVersion, ActiveProtocol(), strCommand);
             } else {
