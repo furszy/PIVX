@@ -1699,8 +1699,7 @@ bool static ProcessMessage(CNode* pfrom, std::string strCommand, CDataStream& vR
                     MarkBlockAsReceived(hashBlock);
                     mapBlockSource.emplace(hashBlock, pfrom->GetId());
                 }
-                bool fAccepted = true;
-                ProcessNewBlock(pblock, nullptr, &fAccepted);
+                ProcessNewBlock(pblock, nullptr);
                 //disconnect this node if its old protocol version
                 pfrom->DisconnectOldProtocol(pfrom->nVersion, ActiveProtocol(), strCommand);
             } else {

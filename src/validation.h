@@ -167,10 +167,9 @@ extern CBlockIndex* pindexBestHeader;
  *
  * @param[in]   pblock     The block we want to process.
  * @param[out]  dbp        The already known disk position of pblock, or nullptr if not yet stored.
- * @param[out]  fAccepted  Whether the block is accepted or not
  * @return True if state.IsValid()
  */
-bool ProcessNewBlock(const std::shared_ptr<const CBlock> pblock, const FlatFilePos* dbp, bool* fAccepted = nullptr);
+bool ProcessNewBlock(const std::shared_ptr<const CBlock>& pblock, const FlatFilePos* dbp);
 
 /** Open a block file (blk?????.dat) */
 FILE* OpenBlockFile(const FlatFilePos& pos, bool fReadOnly = false);

@@ -3308,7 +3308,7 @@ static bool AcceptBlock(const CBlock& block, CValidationState& state, CBlockInde
     return true;
 }
 
-bool ProcessNewBlock(const std::shared_ptr<const CBlock> pblock, const FlatFilePos* dbp, bool* fAccepted)
+bool ProcessNewBlock(const std::shared_ptr<const CBlock>& pblock, const FlatFilePos* dbp)
 {
     AssertLockNotHeld(cs_main);
 
@@ -3328,7 +3328,6 @@ bool ProcessNewBlock(const std::shared_ptr<const CBlock> pblock, const FlatFileP
         // Store to disk
         CBlockIndex* pindex = nullptr;
         bool ret = AcceptBlock(*pblock, state, &pindex, dbp);
-        if (fAccepted) *fAccepted = ret;
         CheckBlockIndex();
         if (!ret) {
             GetMainSignals().BlockChecked(*pblock, state);
