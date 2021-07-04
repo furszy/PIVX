@@ -2937,23 +2937,22 @@ bool ContextualCheckBlockHeader(const CBlockHeader& block, CValidationState& sta
     return true;
 }
 
-bool IsBlockHashInChain(const uint256& hashBlock)
-{
-    if (hashBlock.IsNull() || !mapBlockIndex.count(hashBlock))
-        return false;
-
-    return chainActive.Contains(mapBlockIndex[hashBlock]);
-}
-
 bool IsTransactionInChain(const uint256& txId, int& nHeightTx, CTransactionRef& tx)
 {
     uint256 hashBlock;
     if (!GetTransaction(txId, tx, hashBlock, true))
         return false;
-    if (!IsBlockHashInChain(hashBlock))
-        return false;
 
-    nHeightTx = mapBlockIndex.at(hashBlock)->nHeight;
+    if (hashBlock.IsNull() || !mapBlockIndex.count(hashBlock)) {
+        return false;
+    }
+
+    CBlockIndex* pindex = mapBlockIndex[hashBlock];
+    if (!chainActive.Contains(pindex)) {
+        return false;
+    }
+
+    nHeightTx = pindex->nHeight;
     return true;
 }
 

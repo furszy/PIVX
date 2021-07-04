@@ -255,7 +255,6 @@ void UpdateCoins(const CTransaction& tx, CCoinsViewCache& inputs, int nHeight, b
 
 bool IsTransactionInChain(const uint256& txId, int& nHeightTx, CTransactionRef& tx);
 bool IsTransactionInChain(const uint256& txId, int& nHeightTx);
-bool IsBlockHashInChain(const uint256& hashBlock);
 
 /**
  * Check if transaction will be final in the next block to be created.
