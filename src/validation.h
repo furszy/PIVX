@@ -253,9 +253,6 @@ bool CheckInputs(const CTransaction& tx, CValidationState& state, const CCoinsVi
 /** Apply the effects of this transaction on the UTXO set represented by view */
 void UpdateCoins(const CTransaction& tx, CCoinsViewCache& inputs, int nHeight, bool fSkipInvalid = false);
 
-bool IsTransactionInChain(const uint256& txId, int& nHeightTx, CTransactionRef& tx);
-bool IsTransactionInChain(const uint256& txId, int& nHeightTx);
-
 /**
  * Check if transaction will be final in the next block to be created.
  *
