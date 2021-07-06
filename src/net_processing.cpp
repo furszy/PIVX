@@ -1112,8 +1112,9 @@ bool static ProcessMessage(CNode* pfrom, std::string strCommand, CDataStream& vR
             return false;
         }
 
-        if (pfrom->DisconnectOldProtocol(nVersion, ActiveProtocol(), strCommand))
+        if (pfrom->DisconnectOldProtocol(nVersion, ActiveProtocol())) {
             return false;
+        }
 
         if (nVersion == 10300)
             nVersion = 300;
@@ -1700,8 +1701,10 @@ bool static ProcessMessage(CNode* pfrom, std::string strCommand, CDataStream& vR
                     mapBlockSource.emplace(hashBlock, pfrom->GetId());
                 }
                 ProcessNewBlock(pblock, nullptr);
-                //disconnect this node if its old protocol version
-                pfrom->DisconnectOldProtocol(pfrom->nVersion, ActiveProtocol(), strCommand);
+
+                // Disconnect node if its running an old protocol version,
+                // used during upgrades, when the node is already connected.
+                pfrom->DisconnectOldProtocol(pfrom->nVersion, ActiveProtocol());
             } else {
                 LogPrint(BCLog::NET, "%s : Already processed block %s, skipping ProcessNewBlock()\n", __func__, pblock->GetHash().GetHex());
             }

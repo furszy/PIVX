@@ -417,14 +417,13 @@ void CNode::CloseSocketDisconnect()
     }
 }
 
-bool CNode::DisconnectOldProtocol(int nVersionIn, int nVersionRequired, std::string strLastCommand)
+bool CNode::DisconnectOldProtocol(int nVersionIn, int nVersionRequired)
 {
     fDisconnect = false;
     if (nVersionIn < nVersionRequired) {
         LogPrintf("%s : peer=%d using obsolete version %i; disconnecting\n", __func__, id, nVersionIn);
         fDisconnect = true;
     }
-
     return fDisconnect;
 }
 

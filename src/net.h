@@ -777,7 +777,7 @@ public:
     }
 
     void CloseSocketDisconnect();
-    bool DisconnectOldProtocol(int nVersionIn, int nVersionRequired, std::string strLastCommand = "");
+    bool DisconnectOldProtocol(int nVersionIn, int nVersionRequired);
 
     void copyStats(CNodeStats& stats);
 
