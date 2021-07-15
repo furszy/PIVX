@@ -1,13 +1,18 @@
+# Copyright (c) 2015-2021 The Bitcoin Core developers
+# Copyright (c) 2020-2021 The PIVX Core developers
+# Distributed under the MIT software license, see the accompanying
+# file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 bin_PROGRAMS += bench/bench_pivx
 BENCH_SRCDIR = bench
 BENCH_BINARY = bench/bench_pivx$(EXEEXT)
 
-RAW_TEST_FILES = \
+RAW_BENCH_FILES = \
   bench/data/block2680960.raw
-
-GENERATED_TEST_FILES = $(RAW_TEST_FILES:.raw=.raw.h)
+GENERATED_BENCH_FILES = $(RAW_BENCH_FILES:.raw=.raw.h)
 
 bench_bench_pivx_SOURCES = \
+  $(RAW_BENCH_FILES) \
   bench/bench_pivx.cpp \
   bench/bench.cpp \
   bench/bench.h \
@@ -25,7 +30,7 @@ bench_bench_pivx_SOURCES = \
   bench/prevector.cpp \
   bench/util_time.cpp
 
-nodist_bench_bench_pivx_SOURCES = $(GENERATED_TEST_FILES)
+nodist_bench_bench_pivx_SOURCES = $(GENERATED_BENCH_FILES)
 
 bench_bench_pivx_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES) $(EVENT_CFLAGS) $(EVENT_PTHREADS_CFLAGS) -I$(builddir)/bench/
 bench_bench_pivx_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
@@ -52,8 +57,7 @@ endif
 bench_bench_pivx_LDADD += $(LIBBITCOIN_CONSENSUS) $(BOOST_LIBS) $(BDB_LIBS) $(MINIUPNPC_LIBS) $(NATPMP_LIBS) $(EVENT_PTHREADS_LIBS) $(EVENT_LIBS)
 bench_bench_pivx_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_APP_LDFLAGS)
 
-# !TODO: .raw.h generated test files are not removed with make clean
-CLEAN_BITCOIN_BENCH = bench/*.gcda bench/*.gcno $(GENERATED_TEST_FILES)
+CLEAN_BITCOIN_BENCH = bench/*.gcda bench/*.gcno $(GENERATED_BENCH_FILES)
 
 CLEANFILES += $(CLEAN_BITCOIN_BENCH)
 
