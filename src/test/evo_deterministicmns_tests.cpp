@@ -683,7 +683,6 @@ BOOST_FIXTURE_TEST_CASE(dip3_protx, TestChain400Setup)
 
     // ProUpReg: Try to change the voting key of a masternode that doesn't exist
     {
-        const CKey& votingKey = GetRandomKey();
         auto tx = CreateProUpRegTx(utxos, GetRandHash(), GetRandomKey(), GetRandomKey(), GetRandomKey(), GenerateRandomAddress(), coinbaseKey);
 
         CValidationState state;

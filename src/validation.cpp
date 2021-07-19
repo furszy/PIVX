@@ -23,7 +23,6 @@
 #include "consensus/tx_verify.h"
 #include "consensus/validation.h"
 #include "consensus/zerocoin_verify.h"
-#include "evo/deterministicmns.h"
 #include "evo/specialtx.h"
 #include "flatfile.h"
 #include "fs.h"
@@ -1532,7 +1531,6 @@ static bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockInd
     CAmount nValueOut = 0;
     CAmount nValueIn = 0;
     unsigned int nMaxBlockSigOps = MAX_BLOCK_SIGOPS_CURRENT;
-    uint256 hashBlock = block.GetHash();
 
     // Sapling
     SaplingMerkleTree sapling_tree;
